@@ -18,6 +18,7 @@ def create_user(request):
     if request.method == "POST":
         data = json.loads(request.body)
         usr = User.objects.create(
+            email=data["email"],
             username=data["username"],
             password=make_password(data["password"]),
         )   
@@ -31,7 +32,7 @@ def login_user(request):
         data = json.loads(request.body)
         
         try:
-            usr = User.objects.get(username=data["username"])
+            usr = User.objects.get(email=data["email"])
         except User.DoesNotExist:
             return JsonResponse({"error": "Usuario no encontrado"}, status=404)
         
