@@ -7,25 +7,25 @@ from rest_framework import viewsets
 from .models import User, Video
 import json
 
-# Metodo GET
+# Endpoint para obtener todos los usuarios
 def get_users(request):
     users = User.objects.all().values()
     return JsonResponse(list(users), safe=False)
 
-# Metodo POST
+# Endpoint para crear usuario
 @csrf_exempt
 def create_user(request):
     if request.method == "POST":
         data = json.loads(request.body)
         usr = User.objects.create(
-            email=data["email"],
             username=data["username"],
+            email=data["email"],
             password=make_password(data["password"]),
         )   
         return JsonResponse({"mensaje": "Usuario creado con exito", "id": usr.id})
     return JsonResponse({"error": "Método no permitido"}, status=405)
 
-# Comprobar usuario y contraseña
+# Endpoint para comprobar usuario y contraseña
 @csrf_exempt
 def login_user(request):
     if request.method == "POST":
