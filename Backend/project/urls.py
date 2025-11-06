@@ -6,7 +6,6 @@ from django.conf.urls.static import static
 urlpatterns = [
     path('admin/', admin.site.urls),
 
-    # Rutas para la API
     path('apps/api/', include('apps.api.urls')),
 ]
 if settings.DEBUG:  # para servir archivos en desarrollo

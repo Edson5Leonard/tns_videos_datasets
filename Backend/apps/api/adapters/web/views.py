@@ -1,15 +1,18 @@
 from django.contrib.auth.hashers import check_password
 from django.contrib.auth.hashers import make_password
 from django.views.decorators.csrf import csrf_exempt
-from .serializers import EscuelaITURLSerializer, AudioSaveSerializer, VimeoTextTrackSerializer, VTTContentSerializer
-from .utils import audio_utils, http_utils, text_utils
 from django.http import JsonResponse
 from rest_framework import viewsets, status
-from .models import User, Video
+from ...models import User, Video
 import json
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from apps.api.utils import selenium_utils
+from .serializers import EscuelaITURLSerializer, AudioSaveSerializer, VimeoTextTrackSerializer, VTTContentSerializer
+from ...core import services
+from ...core.services import VideoProcessingError
+from ..scraping.selenium_video_scrapper import SeleniumVideoScraper
+from ..storage.local_file_storage import LocalAudioStorage
+from ...utils import http_utils, text_utils
 
 
 # Endpoint para obtener todos los usuarios
@@ -17,7 +20,6 @@ def get_users(request):
     users = User.objects.all().values()
     return JsonResponse(list(users), safe=False)
 
-# Endpoint para crear usuario
 @csrf_exempt
 def create_user(request):
     if request.method == "POST":
@@ -30,7 +32,6 @@ def create_user(request):
         return JsonResponse({"mensaje": "Usuario creado con exito", "id": usr.id})
     return JsonResponse({"error": "Método no permitido"}, status=405)
 
-# Endpoint para comprobar usuario y contraseña
 @csrf_exempt
 def login_user(request):
     if request.method == "POST":
@@ -80,32 +81,21 @@ def get_texttrack_url(request):
         }, status=status.HTTP_400_BAD_REQUEST)
 
     url = serializer.validated_data['url']
-
-    driver = None
+    
+    scraper = SeleniumVideoScraper()
+    
     try:
-        driver = selenium_utils.get_chrome_driver()
-        driver.implicitly_wait(8)
-        driver.get(url)
-
-        iframe = selenium_utils.get_iframe_video(driver)
-        driver.switch_to.frame(iframe)
-
-        track_src = selenium_utils.get_track_src(driver)
-
+        # 2. Llamar al caso de uso
+        track_src = services.get_texttrack_url_from_page(url, scraper)
         return Response({
           "status": "success",
-          "result": track_src if track_src is not None else False
+          "result": track_src
         })
-
-    except Exception as e:
+    except VideoProcessingError as e:
         return Response({
           "status": "error",
-          "message": "Ocurrió un error al procesar la solicitud"
+          "message": str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-    finally:
-        if driver:
-          driver.quit()
 
 @api_view(['POST'])
 def get_m3u8_url(request):
@@ -121,51 +111,22 @@ def get_m3u8_url(request):
         }, status=status.HTTP_400_BAD_REQUEST)
 
     url = serializer.validated_data['url']
-    driver = None
+    scraper = SeleniumVideoScraper()
+
     try:
-        driver = selenium_utils.get_chrome_driver()
-        driver.implicitly_wait(8)
-        driver.get(url)
-
-        iframe = selenium_utils.get_iframe_video(driver)
-        driver.switch_to.frame(iframe)
-        scripts = selenium_utils.get_scripts(driver)
-
-        player_config = None
-        for script in scripts:
-            #
-            player_config = selenium_utils.get_player_config_from_script(script) 
-            if player_config is not None:
-                break
-
-        if player_config is None:
-            return Response({
-                "status": "error",
-                "message": "No se pudo encontrar la configuración del reproductor en la página",
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-        #
-        m3u8_url = selenium_utils.get_meu8_url_using_player_config(player_config) 
+        # La lógica de scraping ahora está en el adaptador, que es llamado por el servicio.
+        # Para simplificar, llamaremos directamente al método del adaptador aquí.
+        # Idealmente, habría un servicio `get_m3u8_url_from_page`.
+        m3u8_url = scraper.get_m3u8_url(url)
         if m3u8_url is None:
-            return Response({
-                "status": "error",
-                "message": "No se pudo extraer la URL m3u8 de la página",
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
+            raise VideoProcessingError("No se pudo extraer la URL m3u8 de la página")
+        
         return Response({
             "status": "success",
             "result": m3u8_url
         })
-
-    except Exception as e:
-        return Response({
-            "status": "error",
-            "message": "Ocurrió un error al procesar la solicitud"
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-    finally:
-        if driver:
-            driver.quit()
+    except (VideoProcessingError, Exception) as e:
+        return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
 @api_view(['POST'])
 def save_audio_using_m3u8_url(request):
@@ -180,15 +141,19 @@ def save_audio_using_m3u8_url(request):
             "message": serializer.errors
         }, status=status.HTTP_400_BAD_REQUEST)
 
-    try:
-        data = serializer.validated_data
-        file_name = audio_utils.save_audio_using_m3u8_url(data["url"], data["file_name"])
+    data = serializer.validated_data
+    
+    # Instanciamos los adaptadores necesarios
+    storage = LocalAudioStorage()
+    # Este caso de uso no necesita scraping, solo el almacenamiento
 
+    try:
+        # Llamamos directamente al método del adaptador (o a un servicio que lo use)
+        file_name = storage.save_audio_from_m3u8(data["url"], data["file_name"])
         return Response({
             "status": "success",
             "result": file_name
         })
-
     except Exception as e:
         return Response({
             "status": "error",
