@@ -6,3 +6,4 @@ requests
 selenium
 faster-whisper
 ffmpeg-python
+flask
