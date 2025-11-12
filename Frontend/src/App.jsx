@@ -6,6 +6,8 @@ import Inicio from "./views/Inicio/Inicio";
 import Transcripcion from "./views/Transcripcion/Transcripcion";
 import Ingesta from "./views/ingesta/Ingesta";
 import Segmentacion from "./views/segmentacion/segmentacion";
+import Doblaje from "./views/Doblaje/Doblaje";
+import Lotes from "./views/Lotes/Lotes";
 
 
 
@@ -17,7 +19,8 @@ function App() {
         <Route path="/register" element={<LoginRegister />} />
         <Route path="/Inicio" element={<Inicio />} />
         <Route path="/Transcripcion" element={<Transcripcion />} />
-
+        <Route path="/lotes" element={<Lotes />} /> {/* Usando el componente Lotes */}
+        <Route path="/Doblaje" element={<Doblaje />} />
         <Route path="/ingesta" element={<Ingesta />} />
         <Route path="/segmentacion" element={<Segmentacion />} />
       </Routes>
